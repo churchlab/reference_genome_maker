@@ -17,7 +17,7 @@ setup(
     package_dir={'': 'src'},
     packages=['reference_genome_maker'],
     install_requires=[
-        'biopython >= 1.6.1'
+        'biopython >= 1.6.1',
         'PyVCF >= 0.6.7'
     ],
     test_suite='nose.collector',
