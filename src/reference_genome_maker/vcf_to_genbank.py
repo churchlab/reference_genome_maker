@@ -11,6 +11,7 @@ import copy
 import csv
 import os
 import pickle
+import stat
 
 from Bio import SeqIO
 from Bio.SeqFeature import FeatureLocation
@@ -410,14 +411,15 @@ class VCFToGenbankMaker(object):
     def run(self, verbose=False, log_file=None):
         """Performs the actual updating.
         """
-        # Manually add annotations for TAG.
-        add_TAG_annotations(self.genome_record)
-
         # Keep track of which vcf changes were actually made.
         vcf_positions_updated = []
 
         if verbose:
             print 'Handling vcf...'
+
+        # Check if empty vcf, in which case nothing to do.
+        if os.stat(self.vcf_path)[stat.ST_SIZE] == 0:
+            return
 
         with open(self.vcf_path) as vcf_fh:
             vcf_reader = vcf.Reader(vcf_fh)
@@ -994,61 +996,3 @@ def create_filtered_vcf(vcf_path, out_vcf_path, csv_with_pos_to_keep):
         for record in vcf_reader:
             if record.POS in positions_to_keep:
                 vcf_writer.write_record(record)
-
-
-def add_TAG_annotations(genome_record):
-    """Temporary method for adding our UAG mutations manually.
-
-    Mutates the passed in genome_record by adding features for the
-    amber SNPs.
-    """
-    TAG_ANNOTATION_TYPE = VARIANT_ANNOTATION_TYPE
-
-    UAG_LOCATIONS_FILE = os.path.join(
-            GENOMES_DIR, 'mg1655', 'mg1655_uag_locations.csv')
-
-    # Import the list of UAG locations and make the positions 0-indexed
-    # to be consistent with the BioPython convention.
-    uag_location_list = []
-    with open(UAG_LOCATIONS_FILE) as fh:
-        fh.readline() # Drop the first line
-        for line in fh.readlines():
-            uag_location_list.append(int(line.strip()) - 1)
-
-    uag_location_list = sorted(uag_location_list)
-    for current_uag_position in uag_location_list:
-        current_base = genome_record.seq[current_uag_position]
-        if current_base == 'G':
-            alt_base = 'A'
-            feature_location = FeatureLocation(
-                    current_uag_position - 2,
-                    current_uag_position + 1)
-            feature_strand = 1
-        elif current_base == 'C':
-            alt_base = 'T'
-            feature_location = FeatureLocation(
-                    current_uag_position,
-                    current_uag_position + 3)
-            feature_strand = -1
-        else:
-            raise AssertionError("Invalid base at position %d: %s" % (
-                    current_uag_position, current_base))
-
-        # Update the sequence.
-        new_seq = (
-            genome_record.seq[:current_uag_position] +
-            alt_base +
-            genome_record.seq[current_uag_position + 1:])
-        genome_record.seq = new_seq
-
-        # Add a feature annotation.
-        feature_id = 'remove_uag_%d' % current_uag_position
-        feature = SeqFeature(
-                type=TAG_ANNOTATION_TYPE,
-                location=feature_location,
-                strand=feature_strand,
-                id=feature_id
-        )
-        feature.qualifiers['replace'] = 'tag'
-        feature.qualifiers['note'] = 'Reassigning UAG'
-        add_feature_to_seq_record(genome_record, feature)
