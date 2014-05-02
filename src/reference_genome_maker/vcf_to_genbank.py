@@ -662,10 +662,20 @@ class VCFToGenbankMaker(object):
         assert ref_base == self.genome_record.seq[snp_position], (
                 "Error fixing SNP at "
                 "source position %d, "
-                "target position %d, "
-                "Expected: %s, observed: %s" % (
-                        source_snp_position, snp_position, ref_base,
-                        self.genome_record.seq[snp_position]))
+                "target position %d\n "
+                "\tExpected: %s\n"
+                "\tObserved: %s\n"
+                "\tContext: %s" % (
+                        source_snp_position,
+                        snp_position,
+                        ref_base,
+                        self.genome_record.seq[snp_position],
+                        (self.genome_record.seq[
+                                    snp_position - 5:snp_position].lower() +
+                            self.genome_record.seq[snp_position].upper() +
+                            self.genome_record.seq[
+                                    snp_position + 1:snp_position + 5].lower())
+                ))
 
         new_seq = (
                 self.genome_record.seq[:snp_position] +
