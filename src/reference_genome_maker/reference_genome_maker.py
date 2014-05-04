@@ -153,7 +153,7 @@ class RefGenomeMaker:
             end = max(end, variant.end())
             variant_group.append(variant)
         yield variant_group
-        yield [Variant(len(self.genome), '', '')]  # sentinel
+        yield [Variant(len(self.genome), '$', '')]  # sentinel
 
     # Updates the genome features with the mapper.
     #
@@ -166,13 +166,12 @@ class RefGenomeMaker:
             mapped_positions[endpoint] = self.mapper.get_mapping(endpoint)
 
         # Apply the mapping to all the features
-        for index, feature in enumerate(self.genome.features):
+        def map_feature_endpoints(feature):
             featureStart, featureEnd = feature_interval(feature).endpoints()
-            self.genome.features[index] = \
-                    SeqFeature(FeatureLocation(
-                        ExactPosition(mapped_positions[featureStart]),
-                        ExactPosition(mapped_positions[featureEnd]),
-                        ))
+            feature.location = FeatureLocation(
+                    ExactPosition(mapped_positions[featureStart]),
+                    ExactPosition(mapped_positions[featureEnd]))
+        [map_feature_endpoints(feature) for feature in self.genome.features]
 
 
 
@@ -194,17 +193,22 @@ def run(seq_record, output_root, vcf_path, **kwargs):
             position = record.POS - 1
             ref = record.REF
 
+            # Validate sample
+            sample = record.samples[0]
+            if not sample.gt_bases:
+                continue
+
             # HACK: For now, if we see a record that we should handle, we
             # assume that we should take the first alt that is different than
             # the ref.
-            sample = record.samples[0]
             phase_char = sample.gt_phase_char()
             alts = sample.gt_bases.split(phase_char)
             for alt in alts:
                 if alt != ref:
                     break
 
-            rgm.variants.append(Variant(position, ref, alt))
+            if alt != ref:
+                rgm.variants.append(Variant(position, ref, alt))
 
     rgm.apply_variants()
 
@@ -214,3 +218,4 @@ def run(seq_record, output_root, vcf_path, **kwargs):
     SeqIO.write(rgm.genome, output_path, 'genbank')
 
     return rgm.genome
+
