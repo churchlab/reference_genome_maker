@@ -93,6 +93,11 @@ class Interval:
         return s[self.start : self.end]
 
 
+def feature_interval(feature):
+    return Interval(feature.location.start.position,
+            feature.location.end.position)
+
+
 ###############################################################################
 # Interval Mapper
 ###############################################################################
@@ -129,12 +134,13 @@ class IntervalMapper:
 
         if not self.generator:
             self.generator = enumerate(self.mapper)
+            self.mapping = self.generator.next()[1]
 
         while True:
-            index, mapping = self.generator.next()
-            if mapping[0].contains(pos):
+            if self.mapping[0].contains(pos):
                 # If position is the nth character of the interval,
                 #   then return the nth character of the mapped interval.
-                return min(mapping[1].end,
-                        pos - mapping[0].start + mapping[1].start)
+                return min(self.mapping[1].end,
+                        pos - self.mapping[0].start + self.mapping[1].start)
+            self.mapping = self.generator.next()[1]
 

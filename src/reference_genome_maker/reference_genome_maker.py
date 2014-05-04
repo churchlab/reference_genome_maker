@@ -11,6 +11,7 @@ import csv
 import vcf
 from util import Interval
 from util import IntervalMapper
+from util import feature_interval
 from algorithm import shortest_common_superstring
 
 from Bio import SeqIO
@@ -109,13 +110,13 @@ class RefGenomeMaker:
         alt_genome = ''
         ref_index = 0  # index of where we are in the ref genome
         alt_index = 0  # index of where we are in the alt genome
-        mapper = IntervalMapper()
+        self.mapper = IntervalMapper()
         for variant_group in self._get_variant_groups(self.variants):
             # First append the unchanged part of ref
             variant_begin = variant_group[0].start()
             ref_interval = Interval(ref_index, variant_begin)
             alt_genome += ref_interval.sliceInto(str(self.genome.seq))
-            mapper.add_interval(ref_interval,
+            self.mapper.add_interval(ref_interval,
                     Interval.create(alt_index, len(ref_interval)))
 
             # Find shortest common superstring of all variant alts
@@ -124,7 +125,7 @@ class RefGenomeMaker:
             alt_genome += superstring
             for index, variant in enumerate(variant_group):
                 alt_begin = variant_begin + locations[index]
-                mapper.add_interval(variant.interval(),
+                self.mapper.add_interval(variant.interval(),
                         Interval.create(alt_begin, len(variant.alt)))
 
             # Update ref and alt indices
@@ -154,28 +155,19 @@ class RefGenomeMaker:
         yield variant_group
         yield [Variant(len(self.genome), '', '')]  # sentinel
 
-    # Helper function to get the interval of a SeqFeature
-    #
-    @staticmethod
-    def _feature_interval(feature):
-        return Interval(
-                feature.location.start.position,
-                feature.location.end.position
-                )
-
     # Updates the genome features with the mapper.
     #
     def _update_genome_features(self):
         # Get all feature endpoints to be mapped
-        feature_endpoints = sorted(sum([_feature_interval(feature).endpoints()
+        feature_endpoints = sorted(sum([feature_interval(feature).endpoints()
             for feature in self.genome.features], ()))
         mapped_positions = {}
         for endpoint in feature_endpoints:
-            mapped_positions[endpoint] = mapper.get_mapping(endpoint)
+            mapped_positions[endpoint] = self.mapper.get_mapping(endpoint)
 
         # Apply the mapping to all the features
         for index, feature in enumerate(self.genome.features):
-            featureStart, featureEnd = _feature_interval(feature).endpoints()
+            featureStart, featureEnd = feature_interval(feature).endpoints()
             self.genome.features[index] = \
                     SeqFeature(FeatureLocation(
                         ExactPosition(mapped_positions[featureStart]),

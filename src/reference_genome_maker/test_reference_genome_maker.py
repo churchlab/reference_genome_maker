@@ -1,3 +1,5 @@
+from random import randint
+from util import feature_interval
 from reference_genome_maker import *
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
@@ -132,4 +134,37 @@ r.variants = [
     ]
 r.apply_variants()
 assert str(r.genome.seq) == 'GGGGGGTTTAAA'
+
+# Multiple variants, some overlapping
+#   and test features
+r.genome = SeqRecord(Seq('AAACCCGGGTTT'))
+r.genome.features = [
+    SeqFeature(FeatureLocation(ExactPosition(1), ExactPosition(5))),
+    SeqFeature(FeatureLocation(ExactPosition(8), ExactPosition(10))),
+    SeqFeature(FeatureLocation(ExactPosition(10), ExactPosition(11))),
+    ]
+r.variants = [
+    Variant(1, 'AA', 'TT'),
+    Variant(2, 'AC', 'TG'),
+    Variant(3, 'CC', 'GA'),
+    Variant(6, 'GG', 'AC'),
+    Variant(7, 'GGT', 'CCCC'),
+    Variant(9, 'TT', ''),
+    ]
+r.apply_variants()
+new_features = map(feature_interval, r.genome.features)
+assert str(r.genome.seq) == 'ATTGACACCCCT'
+assert new_features[0].endpoints() == (1, 5)
+assert new_features[1].endpoints() == (8, 11)
+assert new_features[2].endpoints() == (11, 11)
+
+# Large test case; test efficiency
+REFLEN, VARLEN, NUMVARS = 100000, 100, 1000
+r.genome = SeqRecord(Seq('A' * REFLEN))
+for i in range(NUMVARS):
+    varlen = randint(0, VARLEN)
+    pos = randint(0, REFLEN - varlen)
+    r.variants.append(
+            Variant(pos, 'A' * varlen, 'T' * varlen))
+r.apply_variants()
 
