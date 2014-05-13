@@ -13,7 +13,7 @@ from util import Interval
 from util import IntervalMapper
 from util import feature_interval
 from algorithm import shortest_common_superstring
-from algorithm import longest_common_substring
+from variants import Variant
 
 from Bio import SeqIO
 from Bio.Alphabet import DNAAlphabet
@@ -21,110 +21,6 @@ from Bio.Seq import Seq
 from Bio.SeqFeature import SeqFeature
 from Bio.SeqFeature import FeatureLocation
 from Bio.SeqFeature import ExactPosition
-
-###############################################################################
-# Variants
-###############################################################################
-
-def inversion(s):
-    return str(Seq(s).reverse_complement())
-
-class Variant:
-
-    def __init__(self, position, ref, alt, note=None):
-        self.position = position
-        self.ref = ref
-        self.alt = alt
-        self.note = note
-        self.type = None
-
-    def __eq__(self, other):
-        return self.position == other.position and \
-                self.ref == other.ref and \
-                self.alt == other.alt
-
-    def __cmp__(self, other):
-        return self.position.__cmp__(other.position) or \
-                len(self.ref).__cmp__(len(other.ref))
-
-    def __str__(self):
-        return '{POS: %d, REF: %s, ALT: %s}' % \
-                (self.position, self.ref, self.alt)
-
-    def __repr__(self):
-        return self.__str__()
-
-    def start(self):
-        return self.position
-
-    def end(self):
-        return self.position + len(self.ref)
-
-    def interval(self):
-        return Interval(self.start(), self.end())
-
-    def primitive_variants(self):
-        """Returns a list of nonoverlapping, "primitive" variants that
-        are equivalent to this one. Primitive variants include basic
-        insertions, deletions, duplications, inversions."""
-
-        MAX_CALC_SIZE = 100 * 100
-        MIN_INVERSION_SIZE = 10
-
-        # LCS algorithm is O(NM), so abort if input is too large.
-        if len(self.ref) * len(self.alt) > MAX_CALC_SIZE:
-            return [self]
-
-        # Find LCS that matches between ref and alt.
-        I, J, L = longest_common_substring(self.ref, self.alt)
-
-        # Also try LCS of reverse complement, to check for large inversion.
-        # If a larger (and significant) inversion is found, use it instead.
-        II, IJ, IL = longest_common_substring(self.ref, inversion(self.alt))
-        use_inversion = IL > MIN_INVERSION_SIZE and IL > L
-        if use_inversion:
-            I, J, L = II, len(self.alt) - (IJ + IL), IL
-
-        # No common strings; add a type if possible, and return this variant.
-        if L == 0:
-            if self.ref or self.alt:
-                if not self.alt:
-                    self.type = 'DEL'
-                elif not self.ref:
-                    self.type = 'INS'
-                return [self]
-            return []
-
-        variants = []
-        variants.extend(Variant(self.position, self.ref[:I], self.alt[:J])
-                .primitive_variants())
-        if use_inversion:
-            inv_ref = self.ref[I:I+L]
-            inv = Variant(self.position + I, inv_ref, inversion(inv_ref))
-            inv.type = 'INV'
-            variants.append(inv)
-        variants.extend(Variant(self.position + I + L, self.ref[I+L:],
-                self.alt[J+L:]).primitive_variants())
-
-        # Hack: for each insertion, check if it is actually a duplication
-        for variant in variants:
-            if variant.type == 'INS':
-                pos = variant.position - self.position
-                if self.ref[pos-len(variant.alt):pos] == variant.alt or \
-                        self.ref[pos:pos+len(variant.alt)] == variant.alt:
-                            variant.type = 'DUP:TANDEM'
-
-        return variants
-
-    def get_type(self):
-        variants = self.primitive_variants()
-        if len(variants) == 0:
-            return 'NONE'
-        elif len(variants) > 1:
-            return 'COMPLEX'
-        else:
-            return variants[0].type
-
 
 ###############################################################################
 # Reference Genome Maker
@@ -168,11 +64,26 @@ class RefGenomeMaker:
         genome_seq = str(self.genome.seq)
         self.variants.sort()
 
+        # Get a list of all primitive variants to be applied.
+        primitive_variants = self._find_all_primitive_variants(
+                genome_seq, self.variants)
+
+        # Now apply the primitive variants in order
+        alt_genome, mapper = self._apply_primitive_variants(
+                genome_seq, primitive_variants)
+
+        # Update genome
+        self.genome.seq = Seq(alt_genome, self.genome.seq.alphabet)
+        self._update_genome_features(mapper)
+
+
+    # Get all primitive elements, and store into self.primitive_variants
+    def _find_all_primitive_variants(self, genome_seq, variants):
         # Find groups of variants whose ref sequences overlap.
         # Find the shortest common superstring of the alts of these variants.
-        # Replace the refs with the shortest common superstring.
-        self.primitive_variants = []
-        generator = iter(self.variants)
+        # Create a variant out of (overlapping refs, SCS)
+        primitive_variants = []
+        generator = iter(variants)
         variant = next(generator, None)
         while variant:
             start, end = variant.interval().endpoints()
@@ -184,47 +95,55 @@ class RefGenomeMaker:
                 variant = next(generator, None)
                 if not variant or variant.start() >= end:
                     locations, superstring = shortest_common_superstring(variant_alts)
-                    self.primitive_variants.extend(Variant(
+                    primitive_variants.extend(Variant(
                         start, genome_seq[start:end], superstring
                         ).primitive_variants())
                     break
                 end = max(end, variant.end())
 
         # Add sentinel.
-        self.primitive_variants.append(Variant(len(self.genome), '', ''))
+        primitive_variants.append(Variant(len(genome_seq), '', ''))
+        return primitive_variants
 
-        # Now apply the primitive variants in order
-        self.mapper = IntervalMapper()
+    def _apply_primitive_variants(self, genome_seq, primitive_variants):
+        # Repeatedly add the identically mapped parts of the genome,
+        #   then the primitive variant alt, until we reach the end.
         alt_genome = ''
+        mapper = IntervalMapper()
         ref_index, alt_index = 0, 0  # index of where we are in ref and alt
-        for variant in self.primitive_variants:
+        for variant in primitive_variants:
             # First append unchanged part of ref genome
+            # REF: ******.............
+            # ALT: ******...............
             ref_interval = Interval(ref_index, variant.start())
             alt_interval = Interval.create(alt_index, len(ref_interval))
             alt_genome += ref_interval.sliceInto(genome_seq)
-            self.mapper.add_interval(ref_interval, alt_interval)
+            mapper.add_interval(ref_interval, alt_interval)
             alt_index += len(ref_interval)
 
+            # Now apply the variant
+            # REF: ......****.........
+            # ALT: ......******.........
             alt_interval = Interval.create(alt_index, len(variant.alt))
             alt_genome += variant.alt
-            self.mapper.add_interval(variant.interval(), alt_interval)
+            mapper.add_interval(variant.interval(), alt_interval)
             ref_index = variant.end()
             alt_index += len(variant.alt)
 
-        # Update genome
-        self.genome.seq = Seq(alt_genome, self.genome.seq.alphabet)
-        self._update_genome_features()
-
+        # Add sentinel.
+        mapper.add_interval(Interval.create(ref_index, 1),
+                Interval.create(alt_index, 1))
+        return alt_genome, mapper
 
     # Updates the genome features with the mapper.
     #
-    def _update_genome_features(self):
+    def _update_genome_features(self, mapper):
         # Get all feature endpoints to be mapped
         feature_endpoints = sorted(sum([feature_interval(feature).endpoints()
             for feature in self.genome.features], ()))
         mapped_positions = {}
         for endpoint in feature_endpoints:
-            mapped_positions[endpoint] = self.mapper.get_mapping(endpoint)
+            mapped_positions[endpoint] = mapper.get_mapping(endpoint)
 
         # Apply the mapping to all the features
         def map_feature_endpoints(feature):

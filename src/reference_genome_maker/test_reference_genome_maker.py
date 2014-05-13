@@ -141,7 +141,7 @@ r.genome = SeqRecord(Seq('AAACCCGGGTTT'))
 r.genome.features = [
     SeqFeature(FeatureLocation(ExactPosition(1), ExactPosition(5))),
     SeqFeature(FeatureLocation(ExactPosition(8), ExactPosition(10))),
-    SeqFeature(FeatureLocation(ExactPosition(9), ExactPosition(11))),
+    SeqFeature(FeatureLocation(ExactPosition(9), ExactPosition(12))),
     ]
 r.variants = [
     Variant(1, 'AA', 'TT'),
@@ -156,7 +156,7 @@ new_features = map(feature_interval, r.genome.features)
 assert str(r.genome.seq) == 'ATTGGCACCCCT'
 assert new_features[0].endpoints() == (1, 5)
 assert new_features[1].endpoints() == (8, 10)
-assert new_features[2].endpoints() == (9, 11)
+assert new_features[2].endpoints() == (9, 12)
 
 # Large test case; test efficiency
 REFLEN, VARLEN, NUMVARS = 100000, 100, 1000
