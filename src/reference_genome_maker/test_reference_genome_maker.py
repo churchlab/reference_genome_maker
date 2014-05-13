@@ -146,14 +146,14 @@ r.genome.features = [
 r.variants = [
     Variant(1, 'AA', 'TT'),
     Variant(2, 'AC', 'TG'),
-    Variant(3, 'CC', 'GA'),
+    Variant(3, 'CC', 'GG'),
     Variant(6, 'GG', 'AC'),
     Variant(7, 'GGT', 'CCCC'),
     Variant(9, 'TT', ''),
     ]
 r.apply_variants()
 new_features = map(feature_interval, r.genome.features)
-assert str(r.genome.seq) == 'ATTGACACCCCT'
+assert str(r.genome.seq) == 'ATTGGCACCCCT'
 assert new_features[0].endpoints() == (1, 5)
 assert new_features[1].endpoints() == (8, 10)
 assert new_features[2].endpoints() == (9, 11)
