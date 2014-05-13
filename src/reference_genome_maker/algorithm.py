@@ -84,6 +84,25 @@ def longest_hamiltonian_path(graph):
     return ins, outs
 
 
+# Finds the longest contiguous substring between the two strings.
+#
+# Returns a tuple (I, J, L) where:
+#   I is the index of the substring in s1
+#   J is the index of the substring in s2
+#   L is the length of the substring
+def longest_common_substring(s1, s2):
+    table = [[0 for i in range(len(s2) + 1)] for j in range(len(s1) + 1)]
+    best = (0, 0, 0)
+    for i, c1 in enumerate(s1):
+        for j, c2 in enumerate(s2):
+            if c1 == c2:
+                newLen = 1 + table[i][j]
+                table[i + 1][j + 1] = newLen
+                if newLen > best[2]:
+                    best = (i - newLen + 1, j - newLen + 1, newLen)
+    return best
+
+
 # Finds a short superstring that contains all specified strings.
 #
 # Returns a tuple (L, S) where:

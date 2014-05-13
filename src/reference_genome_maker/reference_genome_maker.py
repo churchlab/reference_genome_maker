@@ -13,6 +13,7 @@ from util import Interval
 from util import IntervalMapper
 from util import feature_interval
 from algorithm import shortest_common_superstring
+from algorithm import longest_common_substring
 
 from Bio import SeqIO
 from Bio.Alphabet import DNAAlphabet
@@ -58,6 +59,19 @@ class Variant:
     def interval(self):
         return Interval(self.start(), self.end())
 
+    def primitive_variants(self):
+        """Returns a list of nonoverlapping, "primitive" variants that
+        are equivalent to this one. Primitive variants include basic
+        insertions, deletions, duplications, inversions."""
+        I, J, L = longest_common_substring(self.ref, self.alt)
+        if L <= 1:
+            return [self] if self.ref or self.alt else []
+        variants = Variant(self.position, self.ref[:I], self.alt[:J]) \
+                .primitive_variants() + \
+                Variant(self.position + I + L, self.ref[I+L:], self.alt[J+L:]) \
+                .primitive_variants()
+        return variants
+
 
 ###############################################################################
 # Reference Genome Maker
@@ -98,62 +112,56 @@ class RefGenomeMaker:
         """
 
         # First, sort the variants by position
+        genome_seq = str(self.genome.seq)
         self.variants.sort()
 
-        # Now we use the following algorithm to modify the genome.
         # Find groups of variants whose ref sequences overlap.
         # Find the shortest common superstring of the alts of these variants.
         # Replace the refs with the shortest common superstring.
-        
-        # Iterate through each group of variants, gradually appending
-        #   to alt_genome, which contains the bases of the modified genome.
-        alt_genome = ''
-        ref_index = 0  # index of where we are in the ref genome
-        alt_index = 0  # index of where we are in the alt genome
+        self.primitive_variants = []
+        generator = iter(self.variants)
+        variant = next(generator, None)
+        while variant:
+            start, end = variant.interval().endpoints()
+            variant_alts = []
+            assert variant.ref == variant.interval().sliceInto(genome_seq)
+
+            while True:
+                variant_alts.append(variant.alt)
+                variant = next(generator, None)
+                if not variant or variant.start() >= end:
+                    locations, superstring = shortest_common_superstring(variant_alts)
+                    self.primitive_variants.extend(Variant(
+                        start, genome_seq[start:end], superstring
+                        ).primitive_variants())
+                    break
+                end = max(end, variant.end())
+
+        # Add sentinel.
+        self.primitive_variants.append(Variant(len(self.genome), '', ''))
+
+        # Now apply the primitive variants in order
         self.mapper = IntervalMapper()
-        for variant_group in self._get_variant_groups(self.variants):
-            # First append the unchanged part of ref
-            variant_begin = variant_group[0].start()
-            ref_interval = Interval(ref_index, variant_begin)
-            alt_genome += ref_interval.sliceInto(str(self.genome.seq))
-            self.mapper.add_interval(ref_interval,
-                    Interval.create(alt_index, len(ref_interval)))
+        alt_genome = ''
+        ref_index, alt_index = 0, 0  # index of where we are in ref and alt
+        for variant in self.primitive_variants:
+            # First append unchanged part of ref genome
+            ref_interval = Interval(ref_index, variant.start())
+            alt_interval = Interval.create(alt_index, len(ref_interval))
+            alt_genome += ref_interval.sliceInto(genome_seq)
+            self.mapper.add_interval(ref_interval, alt_interval)
+            alt_index += len(ref_interval)
 
-            # Find shortest common superstring of all variant alts
-            locations, superstring = shortest_common_superstring(
-                    [variant.alt for variant in variant_group])
-            alt_genome += superstring
-            for index, variant in enumerate(variant_group):
-                alt_begin = variant_begin + locations[index]
-                self.mapper.add_interval(variant.interval(),
-                        Interval.create(alt_begin, len(variant.alt)))
-
-            # Update ref and alt indices
-            ref_index = max([variant.end() for variant in variant_group])
-            alt_index += len(ref_interval) + len(superstring)
+            alt_interval = Interval.create(alt_index, len(variant.alt))
+            alt_genome += variant.alt
+            self.mapper.add_interval(variant.interval(), alt_interval)
+            ref_index = variant.end()
+            alt_index += len(variant.alt)
 
         # Update genome
         self.genome.seq = Seq(alt_genome, self.genome.seq.alphabet)
         self._update_genome_features()
 
-
-    # Generator function to produce a group of variants with
-    #   overlapping ref sequences.
-    # variants must be in order of start position.
-    # This function also yields a sentinel variant group at the end.
-    #
-    def _get_variant_groups(self, variants):
-        variant_group = []
-        end = -1  # max of variant.ends in variant_group
-        for variant in variants:
-            if variant_group and variant.start() >= end and \
-                    variant_group[-1] != variant:  # check for duplicates
-                yield variant_group
-                variant_group = []
-            end = max(end, variant.end())
-            variant_group.append(variant)
-        yield variant_group
-        yield [Variant(len(self.genome), '$', '')]  # sentinel
 
     # Updates the genome features with the mapper.
     #

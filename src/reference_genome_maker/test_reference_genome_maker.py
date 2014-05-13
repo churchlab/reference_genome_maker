@@ -101,7 +101,7 @@ r.variants = [
     Variant(2, '', 'AA'),
     ]
 r.apply_variants()
-assert str(r.genome.seq) == 'TTAATT'
+assert str(r.genome.seq) == 'TTAAAATT'
 
 r.genome = SeqRecord(Seq('AAACCCGGG'))
 r.variants = [
@@ -141,7 +141,7 @@ r.genome = SeqRecord(Seq('AAACCCGGGTTT'))
 r.genome.features = [
     SeqFeature(FeatureLocation(ExactPosition(1), ExactPosition(5))),
     SeqFeature(FeatureLocation(ExactPosition(8), ExactPosition(10))),
-    SeqFeature(FeatureLocation(ExactPosition(10), ExactPosition(11))),
+    SeqFeature(FeatureLocation(ExactPosition(9), ExactPosition(11))),
     ]
 r.variants = [
     Variant(1, 'AA', 'TT'),
@@ -155,12 +155,13 @@ r.apply_variants()
 new_features = map(feature_interval, r.genome.features)
 assert str(r.genome.seq) == 'ATTGACACCCCT'
 assert new_features[0].endpoints() == (1, 5)
-assert new_features[1].endpoints() == (8, 11)
-assert new_features[2].endpoints() == (11, 11)
+assert new_features[1].endpoints() == (8, 10)
+assert new_features[2].endpoints() == (9, 11)
 
 # Large test case; test efficiency
 REFLEN, VARLEN, NUMVARS = 100000, 100, 1000
 r.genome = SeqRecord(Seq('A' * REFLEN))
+r.variants = []
 for i in range(NUMVARS):
     varlen = randint(0, VARLEN)
     pos = randint(0, REFLEN - varlen)
