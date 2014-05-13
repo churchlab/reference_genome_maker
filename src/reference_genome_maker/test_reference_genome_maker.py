@@ -139,9 +139,10 @@ assert str(r.genome.seq) == 'GGGGGGTTTAAA'
 #   and test features
 r.genome = SeqRecord(Seq('AAACCCGGGTTT'))
 r.genome.features = [
+    SeqFeature(FeatureLocation(ExactPosition(0), ExactPosition(12))),
     SeqFeature(FeatureLocation(ExactPosition(1), ExactPosition(5))),
     SeqFeature(FeatureLocation(ExactPosition(8), ExactPosition(10))),
-    SeqFeature(FeatureLocation(ExactPosition(9), ExactPosition(12))),
+    SeqFeature(FeatureLocation(ExactPosition(9), ExactPosition(11))),
     ]
 r.variants = [
     Variant(1, 'AA', 'TT'),
@@ -154,9 +155,20 @@ r.variants = [
 r.apply_variants()
 new_features = map(feature_interval, r.genome.features)
 assert str(r.genome.seq) == 'ATTGGCACCCCT'
-assert new_features[0].endpoints() == (1, 5)
-assert new_features[1].endpoints() == (8, 10)
-assert new_features[2].endpoints() == (9, 12)
+assert new_features[0].endpoints() == (0, 12)
+assert new_features[1].endpoints() == (1, 5)
+assert new_features[2].endpoints() == (8, 10)
+assert new_features[3].endpoints() == (9, 11)
+
+# Test qualifiers
+qualifiers = map(lambda feature: feature.qualifiers, r.genome.features)
+assert len(qualifiers[0]['variants']) == 2
+assert qualifiers[0]['variants'][0] == '{POS: 1, REF: AACC, ALT: TTGG}'
+assert qualifiers[0]['variants'][1] == '{POS: 6, REF: GGGTT, ALT: ACCCC}'
+assert len(qualifiers[1]['variants']) == 1
+assert qualifiers[1]['variants'][0] == '{POS: 1, REF: AACC, ALT: TTGG}'
+assert len(qualifiers[2]['variants']) == 1
+assert qualifiers[2]['variants'][0] == '{POS: 6, REF: GGGTT, ALT: ACCCC}'
 
 # Large test case; test efficiency
 REFLEN, VARLEN, NUMVARS = 100000, 100, 1000

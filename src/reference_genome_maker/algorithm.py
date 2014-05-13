@@ -162,3 +162,39 @@ def shortest_common_superstring(strings):
 
     return locations, superstring
 
+
+# Find all overlaps between intervals in A with intervals in B.
+# Returns a dictionary, with keys equal to indices in A and
+#   values equal to lists consisting of indices of intervals in B that
+#   overlap with the interval of A.
+# An optional limit parameter gives an upper bound on the list sizes.
+def find_overlapping_segments(A, B, limit=None):
+    # Sort all interval endpoints.
+    # Store tuples of the form (position, isB, isEnd, index)
+    # Sort biased first on position, then isEnd
+    endpoints = []
+    for isB, group in enumerate((A, B)):
+        for index, interval in enumerate(group):
+            for isEnd, pos in enumerate(interval.endpoints()):
+                endpoints.append((pos, isB, isEnd, index))
+    endpoints.sort(key=lambda (pos, isB, isEnd, index): (pos, not isEnd))
+
+    # Helper function to mark interval I to overlap with interval J
+    ans = defaultdict(list)
+    currents = (set(), set())  # stores current intervals of A and B
+    def add_overlap(I, J):
+        ans[J].append(I)
+        if limit and len(ans[J]) >= limit:
+            currents[0].remove(J)
+
+    # Line sweep.
+    for pos, isB, isEnd, index in endpoints:
+        if isEnd:
+            if index in currents[isB]:
+                currents[isB].remove(index)
+        else:
+            currents[isB].add(index)
+            for oIndex in currents[not isB]:
+                add_overlap(*((index, oIndex) if isB else (oIndex, index)))
+
+    return ans

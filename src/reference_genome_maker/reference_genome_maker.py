@@ -13,6 +13,7 @@ from util import Interval
 from util import IntervalMapper
 from util import feature_interval
 from algorithm import shortest_common_superstring
+from algorithm import find_overlapping_segments
 from variants import Variant
 
 from Bio import SeqIO
@@ -21,6 +22,10 @@ from Bio.Seq import Seq
 from Bio.SeqFeature import SeqFeature
 from Bio.SeqFeature import FeatureLocation
 from Bio.SeqFeature import ExactPosition
+
+# Maximum number of qualifiers for variants that will be attached to
+#   each feature.
+MAX_VARIANT_QUALIFIERS = 5
 
 ###############################################################################
 # Reference Genome Maker
@@ -68,6 +73,10 @@ class RefGenomeMaker:
         primitive_variants = self._find_all_primitive_variants(
                 genome_seq, self.variants)
 
+        # Add a qualifier to each feature for every variant intersecting
+        #   the feature.
+        self._qualify_genome_features(primitive_variants)
+
         # Now apply the primitive variants in order
         alt_genome, mapper = self._apply_primitive_variants(
                 genome_seq, primitive_variants)
@@ -104,6 +113,23 @@ class RefGenomeMaker:
         # Add sentinel.
         primitive_variants.append(Variant(len(genome_seq), '', ''))
         return primitive_variants
+
+    def _qualify_genome_features(self, primitive_variants):
+        # Perform a line sweep of the variant and feature endpoints,
+        #   in order of position.
+        overlaps = find_overlapping_segments(
+                [feature_interval(f) for f in self.genome.features],
+                [variant.interval() for variant in primitive_variants],
+                MAX_VARIANT_QUALIFIERS)
+
+        # Add the qualifiers.
+        for index, variantIndices in overlaps.items():
+            feature = self.genome.features[index]
+            if 'variants' not in feature.qualifiers:
+                feature.qualifiers['variants'] = []
+            for variantIndex in variantIndices:
+                feature.qualifiers['variants'].append(
+                        str(primitive_variants[variantIndex]))
 
     def _apply_primitive_variants(self, genome_seq, primitive_variants):
         # Repeatedly add the identically mapped parts of the genome,
