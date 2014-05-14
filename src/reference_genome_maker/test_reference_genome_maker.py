@@ -139,10 +139,10 @@ assert str(r.genome.seq) == 'GGGGGGTTTAAA'
 #   and test features
 r.genome = SeqRecord(Seq('AAACCCGGGTTT'))
 r.genome.features = [
-    SeqFeature(FeatureLocation(ExactPosition(0), ExactPosition(12))),
-    SeqFeature(FeatureLocation(ExactPosition(1), ExactPosition(5))),
-    SeqFeature(FeatureLocation(ExactPosition(8), ExactPosition(10))),
-    SeqFeature(FeatureLocation(ExactPosition(9), ExactPosition(11))),
+    SeqFeature(FeatureLocation(0, 12)),
+    SeqFeature(FeatureLocation(1, 5)),
+    SeqFeature(FeatureLocation(8, 10)),
+    SeqFeature(FeatureLocation(9, 11)),
     ]
 r.variants = [
     Variant(1, 'AA', 'TT'),
@@ -159,6 +159,10 @@ assert new_features[0].endpoints() == (0, 12)
 assert new_features[1].endpoints() == (1, 5)
 assert new_features[2].endpoints() == (8, 10)
 assert new_features[3].endpoints() == (9, 11)
+
+# Test variation features
+assert new_features[4].endpoints() == (1, 5)  # variant 1
+assert new_features[5].endpoints() == (6, 11)  # variant 2
 
 # Test qualifiers
 qualifiers = map(lambda feature: feature.qualifiers, r.genome.features)

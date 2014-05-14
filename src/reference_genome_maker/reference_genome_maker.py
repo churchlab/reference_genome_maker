@@ -21,7 +21,6 @@ from Bio.Alphabet import DNAAlphabet
 from Bio.Seq import Seq
 from Bio.SeqFeature import SeqFeature
 from Bio.SeqFeature import FeatureLocation
-from Bio.SeqFeature import ExactPosition
 
 # Maximum number of qualifiers for variants that will be attached to
 #   each feature.
@@ -84,6 +83,7 @@ class RefGenomeMaker:
         # Update genome
         self.genome.seq = Seq(alt_genome, self.genome.seq.alphabet)
         self._update_genome_features(mapper)
+        self._add_variant_features(primitive_variants)
 
 
     # Get all primitive elements, and store into self.primitive_variants
@@ -172,13 +172,20 @@ class RefGenomeMaker:
             mapped_positions[endpoint] = mapper.get_mapping(endpoint)
 
         # Apply the mapping to all the features
-        def map_feature_endpoints(feature):
-            featureStart, featureEnd = feature_interval(feature).endpoints()
+        for feature in self.genome.features:
             feature.location = FeatureLocation(
-                    ExactPosition(mapped_positions[featureStart]),
-                    ExactPosition(mapped_positions[featureEnd]))
-        [map_feature_endpoints(feature) for feature in self.genome.features]
+                    *map(lambda endpoint: mapped_positions[endpoint],
+                        feature_interval(feature).endpoints()))
 
+    # Add the variants as annotations to the reference genome
+    #
+    def _add_variant_features(self, variants):
+        for variant in variants:
+            self.genome.features.append(SeqFeature(
+                type='variation',
+                location=FeatureLocation(*variant.interval().endpoints()),
+                strand=1,
+                ))
 
 
 ###############################################################################
