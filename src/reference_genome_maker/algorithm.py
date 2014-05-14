@@ -177,24 +177,30 @@ def find_overlapping_segments(A, B, limit=None):
         for index, interval in enumerate(group):
             for isEnd, pos in enumerate(interval.endpoints()):
                 endpoints.append((pos, isB, isEnd, index))
-    endpoints.sort(key=lambda (pos, isB, isEnd, index): (pos, not isEnd))
-
-    # Helper function to mark interval I to overlap with interval J
-    ans = defaultdict(list)
-    currents = (set(), set())  # stores current intervals of A and B
-    def add_overlap(I, J):
-        ans[J].append(I)
-        if limit and len(ans[J]) >= limit:
-            currents[0].remove(J)
+    endpoints.sort(key=lambda (pos, isB, isEnd, index): (pos, isEnd))
 
     # Line sweep.
+    ans = defaultdict(list)
+    currents = (set(), set())  # stores current intervals of A and B
     for pos, isB, isEnd, index in endpoints:
         if isEnd:
             if index in currents[isB]:
                 currents[isB].remove(index)
         else:
             currents[isB].add(index)
-            for oIndex in currents[not isB]:
-                add_overlap(*((index, oIndex) if isB else (oIndex, index)))
+            if isB:
+                # Add this B interval to all A intervals that are not full.
+                for aIndex in list(currents[0]):
+                    ans[aIndex].append(index)
+                    if limit and len(ans[aIndex]) >= limit:
+                        currents[0].remove(aIndex)
+            else:
+                # Add at most limit intervals of B to this A interval.
+                for counter, bIndex in enumerate(currents[1]):
+                    if limit and counter >= limit:
+                        currents[0].remove(index)
+                        break
+                    ans[index].append(bIndex)
 
     return ans
+
