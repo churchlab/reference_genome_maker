@@ -97,14 +97,14 @@ class Variant:
 
         variants = []
         variants.extend(Variant(self.position, self.ref[:I], self.alt[:J])
-                .primitive_variants())
+                .primitive_variants_helper())
         if use_inversion:
             inv_ref = self.ref[I:I+L]
             inv = Variant(self.position + I, inv_ref, inversion(inv_ref))
             inv.type = 'INV'
             variants.append(inv)
         variants.extend(Variant(self.position + I + L, self.ref[I+L:],
-                self.alt[J+L:]).primitive_variants())
+                self.alt[J+L:]).primitive_variants_helper())
 
         return variants
 

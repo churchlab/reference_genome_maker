@@ -3,32 +3,6 @@ Contains utility functions for algorithmic problems.
 """
 
 ###############################################################################
-# Rolling Hash
-###############################################################################
-
-PRIME, MOD = 97654321, 2 ** 32  # constants for rolling hash
-
-# Computes the forward rolling hash of a string.
-# Implemented as a generator that outputs (index, hash) tuples
-#
-def forward_hash(s):
-    roll = 0
-    for i, c in enumerate(s):
-        roll = (roll * PRIME + ord(c)) % MOD
-        yield i + 1, roll
-
-# Computes the backward rolling hash of a string.
-# Implemented as a generator that outputs (index, hash) tuples
-#
-def backward_hash(s):
-    roll, exp = 0, 1
-    for i, c in enumerate(s[::-1]):
-        roll = (roll + exp * ord(c)) % MOD
-        yield i + 1, roll
-        exp = (exp * PRIME) % MOD
-
-
-###############################################################################
 # Union Find
 ###############################################################################
 
@@ -75,7 +49,7 @@ class Interval:
         return Interval(start, start + length)
 
     def __str__(self):
-        return '(%d, %d)' % (self.start, self.end)
+        return '(%d, %d)' % self.endpoints()
 
     def __repr__(self):
         return self.__str__()
@@ -133,14 +107,16 @@ class IntervalMapper:
         self.flags = True, pos
 
         if not self.generator:
-            self.generator = enumerate(self.mapper)
-            self.mapping = self.generator.next()[1]
+            # Initialize generator and current state.
+            self.generator = iter(self.mapper)
+            self.mapping = next(self.generator, None)
 
-        while True:
+        while self.mapping:
             if self.mapping[0].contains(pos):
                 # If position is the nth character of the interval,
                 #   then return the nth character of the mapped interval.
                 return min(self.mapping[1].end,
                         pos - self.mapping[0].start + self.mapping[1].start)
-            self.mapping = self.generator.next()[1]
+            self.mapping = next(self.generator, None)
+        return self.mapper[-1][1].end if self.mapper else 0
 

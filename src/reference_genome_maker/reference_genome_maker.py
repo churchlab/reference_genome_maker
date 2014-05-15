@@ -103,15 +103,12 @@ class RefGenomeMaker:
                 variant_alts.append(variant.alt)
                 variant = next(generator, None)
                 if not variant or variant.start() >= end:
-                    locations, superstring = shortest_common_superstring(variant_alts)
+                    superstring = shortest_common_superstring(variant_alts)
                     primitive_variants.extend(Variant(
                         start, genome_seq[start:end], superstring
                         ).primitive_variants())
                     break
                 end = max(end, variant.end())
-
-        # Add sentinel.
-        primitive_variants.append(Variant(len(genome_seq), '', ''))
         return primitive_variants
 
     def _qualify_genome_features(self, primitive_variants):
@@ -132,6 +129,10 @@ class RefGenomeMaker:
                         str(primitive_variants[variantIndex]))
 
     def _apply_primitive_variants(self, genome_seq, primitive_variants):
+        # Add a sentinel variant at the end.
+        primitive_variants = primitive_variants[:]
+        primitive_variants.append(Variant(len(genome_seq), '', ''))
+
         # Repeatedly add the identically mapped parts of the genome,
         #   then the primitive variant alt, until we reach the end.
         alt_genome = ''
@@ -156,9 +157,6 @@ class RefGenomeMaker:
             ref_index = variant.end()
             alt_index += len(variant.alt)
 
-        # Add sentinel.
-        mapper.add_interval(Interval.create(ref_index, 1),
-                Interval.create(alt_index, 1))
         return alt_genome, mapper
 
     # Updates the genome features with the mapper.

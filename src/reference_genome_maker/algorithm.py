@@ -3,51 +3,15 @@ Contains algorithmic helper functions.
 """
 
 from collections import defaultdict
-from util import forward_hash
-from util import backward_hash
 from util import UnionFind
 
-# Computes all strings that are substrings of another string
-# Returns a list of tuples (I, J, K) where:
-#   I is the index of the substring
-#   J is the index of the superstring
-#   K is the index of the substring in the superstring
-def compute_substrings(strings):
-    substrings = []
-    for i, s in enumerate(strings):
-        # Bias looking for nearby strings first, so increment from di = 1.
-        # For strings to the right, use index, but
-        #   for strings to the left, use rindex to find closest match.
-        for di in range(1, len(strings)):
-            j = i + di
-            if j >= 0 and j < len(strings):
-                other = strings[j]
-                if s != other and s in other:
-                    substrings.append((i, j, other.index(s)))
-                    break
-            j = i - di
-            if j >= 0 and j < len(strings):
-                other = strings[j]
-                if s != other and s in other:
-                    substrings.append((i, j, other.rindex(s)))
-                    break
-    return substrings
-
-
-# Computes the longest overlaps between all pairs of strings
+# Computes the length of the largest overlap between the end of s1 and
+#   the beginning of s2
 #
-def compute_overlaps(strings):
-    overlaps = [[0] * len(strings) for s in enumerate(strings)]
-    hashes = defaultdict(list)
-    for i, s in enumerate(strings):
-        for index, hash in backward_hash(s):
-            hashes[hash].append(i)
-    for i, s in enumerate(strings):
-        for index, hash in forward_hash(s):
-            for j in hashes[hash]:
-                if strings[j][-index:] == strings[i][:index]:
-                    overlaps[j][i] = index
-    return overlaps
+def overlapLen(s1, s2):
+    for i in range(len(s1) + 1):
+        if s2.startswith(s1[i:]):
+            return len(s1) - i
 
 
 # Computes the approximate longest Hamiltonian path of the given directed
@@ -104,10 +68,8 @@ def longest_common_substring(s1, s2):
 
 
 # Finds a short superstring that contains all specified strings.
-#
-# Returns a tuple (L, S) where:
-#   S is the shortest common superstring (SCS)
-#   L is a list of indices [A_1, A_2, ... A_n] of the strings in the SCS
+#   strings: a list of strings
+#   returns the shortest common superstring (SCS)
 #
 def shortest_common_superstring(strings):
     # Use a greedy algorithm based on the following paper by Turner:
@@ -127,12 +89,11 @@ def shortest_common_superstring(strings):
     # First remove all strings which are substrings of other strings.
     # This can be theoretically done in O(m) with a suffix tree, but
     #   is done naively now in order to not have dependencies.
-    filtered_strings = compute_substrings(strings)
-    for i, j, index in reversed(filtered_strings):
-        strings.pop(i)
+    strings = filter(lambda s: all(
+        [s == string or s not in string for string in strings]), strings)
 
     # Find longest overlap between every pair of strings
-    overlaps = compute_overlaps(strings)
+    overlaps = [[overlapLen(s1, s2) for s2 in strings] for s1 in strings]
 
     # Interpret the overlaps matrix as a graph, and find the longest
     #   Hamiltonian Path.
@@ -145,22 +106,13 @@ def shortest_common_superstring(strings):
             break
 
     # Now compute the longest superstring and the locations of its substrings.
-    locations = [0] * len(strings)
     while index in outs:
         next_index = outs[index]
         overlap = overlaps[index][next_index]
-        locations[next_index] = len(superstring) - overlap
         superstring += strings[next_index][overlap:]
         index = next_index
 
-    # Finally, compute the locations of substrings removed in the first step.
-    # First we add them back with placeholders, then we set the correct value.
-    for i, j, index in filtered_strings:
-        locations.insert(i, -1)  # placeholder
-    for i, j, index in filtered_strings:
-        locations[i] = locations[j] + index
-
-    return locations, superstring
+    return superstring
 
 
 # Find all overlaps between intervals in A with intervals in B.
