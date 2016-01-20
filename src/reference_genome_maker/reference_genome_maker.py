@@ -208,6 +208,7 @@ def run(seq_record, output_root, vcf_path, **kwargs):
                     break
 
             if alt != ref:
+                alt = alt if not alt == '<DEL>' else ''
                 rgm.variants.append(Variant(position, ref, alt))
 
     rgm.apply_variants()
