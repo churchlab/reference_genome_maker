@@ -7,8 +7,9 @@ Methods also exist for parsing either a csv or vcf
 into a variant set.
 """
 
-import csv
+import re
 import vcf
+
 from util import Interval
 from util import IntervalMapper
 from util import feature_interval
@@ -17,9 +18,9 @@ from algorithm import shortest_common_superstring
 from Bio import SeqIO
 from Bio.Alphabet import DNAAlphabet
 from Bio.Seq import Seq
-from Bio.SeqFeature import SeqFeature
 from Bio.SeqFeature import FeatureLocation
 from Bio.SeqFeature import ExactPosition
+
 
 ###############################################################################
 # Variants
@@ -65,30 +66,6 @@ class Variant:
 
 class RefGenomeMaker:
 
-    def parse_from_csv(variant_set_csv):
-        """Updates the Ref Genome Maker with a list of variants in a csv.
-
-        Args:
-            variant_data_csv: Path to .csv file containing the following cols:
-                Required:
-                    * position - Position in the starting genome.
-                    * ref - Reference sequence at that position.
-                    * alt - The alternative to replace with.
-                Optional:
-                    * note - A note to add to the data.
-        """
-        self.variants = []
-
-        with open(variant_set_csv) as csv_fh:
-            csv_reader = csv.DictReader(csv_fh)
-            for row in csv_reader:
-                self.variants.append(Variant(
-                    int(row['position']) - 1,
-                    row['ref'],
-                    row['alt'],
-                    row.get('note', None)
-                ))
-
     def apply_variants(self):
         """Applies stored variants to the given ref genome (string).
 
@@ -104,7 +81,7 @@ class RefGenomeMaker:
         # Find groups of variants whose ref sequences overlap.
         # Find the shortest common superstring of the alts of these variants.
         # Replace the refs with the shortest common superstring.
-        
+
         # Iterate through each group of variants, gradually appending
         #   to alt_genome, which contains the bases of the modified genome.
         alt_genome = ''
@@ -192,6 +169,12 @@ def run(seq_record, output_root, vcf_path, **kwargs):
         for index, record in enumerate(vcf_reader):
             position = record.POS - 1
             ref = record.REF
+
+            # Special handling for long ref.
+            maybe_long_ref_match = re.match('LONG:(\d+)', ref)
+            if maybe_long_ref_match:
+                ref_size = int(maybe_long_ref_match.group(1))
+                ref = str(seq_record.seq[position:position + ref_size])
 
             # Validate sample
             sample = record.samples[0]
